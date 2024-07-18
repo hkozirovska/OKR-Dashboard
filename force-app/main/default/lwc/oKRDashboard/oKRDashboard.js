@@ -3,15 +3,13 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import getObjectivesByUserAndYear from '@salesforce/apex/ObjectiveController.getObjectivesByUserAndYear';
 import createObjective from '@salesforce/apex/ObjectiveController.createObjective';
-import getKeyResults from '@salesforce/apex/KeyResultController.getKeyResults';
-import createKeyResult from '@salesforce/apex/KeyResultController.createKeyResult';
 import getUsers from '@salesforce/apex/UserSelectionController.getUsers';
 import getNearest10Years from '@salesforce/apex/ObjectiveController.getNearest10Years';
 import getRelatedRecords from '@salesforce/apex/RelatedRecordController.getRelatedRecords';
 import createRelatedRecord from '@salesforce/apex/RelatedRecordController.createRelatedRecord';
-import addTarget from '@salesforce/apex/KeyResultController.addTarget';
-import updateTargetScore from '@salesforce/apex/KeyResultController.updateTargetScore';
-import { refreshApex } from '@salesforce/apex';
+import getKeyResultsWithTargets from '@salesforce/apex/KeyResultController.getKeyResultsWithTargets';
+import createKeyResult from '@salesforce/apex/KeyResultController.createKeyResult';
+import saveNewTarget from '@salesforce/apex/KeyResultController.saveNewTarget';
 
 export default class OkrDashboard extends NavigationMixin(LightningElement) {
     @track objectives;
@@ -39,21 +37,35 @@ export default class OkrDashboard extends NavigationMixin(LightningElement) {
         { label: 'Google Review', value: 'Google Review' },
         { label: 'Case Study', value: 'Case Study' },
     ];
-    @track targetOptions = [
-        { label: 'Calls', value: 'Calls' },
-        { label: 'Events', value: 'Events' },
-        { label: 'Opportunities', value: 'Opportunities' },
-        { label: 'Contracts', value: 'Contracts' },
-        { label: 'Leads', value: 'Leads' },
-        { label: 'Surveys', value: 'Surveys' },
-        { label: 'Reviews', value: 'Reviews' },
-        { label: 'Google Reviews', value: 'Google reviews' },
-        { label: 'Case Studies', value: 'Case studies' }
-    ];
+    @track selectedTargets = [];
+    @track targetScore;
     @track isNewTargetModalOpen = false;
-    @track selectedTarget = '';
-    @track targetScore = 0;
-    @track keyResultIdToAddTarget = '';
+    targetOptions = [
+        { label: 'Calls', value: 'Calls' },
+        { label: 'Case Studies', value: 'Case Studies' },
+        { label: 'Contracts', value: 'Contracts' },
+        { label: 'Events', value: 'Events' },
+        { label: 'Google Reviews', value: 'Google Reviews' },
+        { label: 'Leads', value: 'Leads' },
+        { label: 'Opportunities', value: 'Opportunities' },
+        { label: 'Reviews', value: 'Reviews' },
+        { label: 'Surveys', value: 'Surveys' }
+    ];
+
+    eventOptions = [
+        { label: 'Email', value: 'Email' },
+        { label: 'Meeting', value: 'Meeting' },
+        { label: 'Other', value: 'Other' },
+    ];
+
+    contractOptions = [
+        { label: 'FP', value: 'FP' },
+        { label: 'T&M', value: 'T&M' },
+        { label: 'CR', value: 'CR' }
+    ];
+
+    @track additionalOptions = [];
+
     connectedCallback() {
         this.loadInitialData();
     }
@@ -82,23 +94,26 @@ export default class OkrDashboard extends NavigationMixin(LightningElement) {
         });
     }
 
-    loadObjectives() {
+    async loadObjectives() {
         if (this.selectedUserId && this.selectedYear) {
-            getObjectivesByUserAndYear({ userId: this.selectedUserId, year: this.selectedYear })
-                .then(data => {
-                    this.objectives = data;
-                    this.objectives.forEach(obj => {
-                        obj.keyResults = [];
-                        getKeyResults({ objectiveId: obj.id }).then(keyResults => {
-                            obj.keyResults = keyResults;
-                        }).catch(error => {
-                            console.error(error);
-                        });
-                    });
-                })
-                .catch(error => {
-                    console.error(error);
+            try {
+                const data = await getObjectivesByUserAndYear({ userId: this.selectedUserId, year: this.selectedYear });
+                const objectivesWithKeyResultsPromises = data.map(async (obj) => {
+                    try {
+                        const keyResults = await getKeyResultsWithTargets({ objectiveId: obj.id });
+                        return { ...obj, keyResults: keyResults };
+                    } catch (error) {
+                        console.error(`Error fetching key results for objective ${obj.id}:`, error);
+                        return { ...obj, keyResults: [] };
+                    }
                 });
+
+                const objectivesWithKeyResults = await Promise.all(objectivesWithKeyResultsPromises);
+                this.objectives = objectivesWithKeyResults;
+                console.log('Loaded objectives with key results:', this.objectives);
+            } catch (error) {
+                console.error('Error loading objectives:', error);
+            }
         }
     }
 
@@ -183,7 +198,7 @@ export default class OkrDashboard extends NavigationMixin(LightningElement) {
             .then(() => {
                 this.isNewKeyResultModalOpen = false;
                 this.showToast('Success', 'Key Result created successfully', 'success');
-                return getKeyResults({ objectiveId: this.selectedObjectiveId });
+                return getKeyResultsWithTargets({ objectiveId: this.selectedObjectiveId });
             })
             .then(result => {
                 const updatedObjectives = this.objectives.map(obj => {
@@ -249,37 +264,61 @@ export default class OkrDashboard extends NavigationMixin(LightningElement) {
             this.showToast('Error', 'Error creating related record', 'error');
         });
     }    
-    
+
     handleShowNewTargetModal(event) {
+        this.currentKeyResultId = event.target.dataset.id;
         this.isNewTargetModalOpen = true;
-        this.keyResultIdToAddTarget = event.target.dataset.id;
     }
 
     handleCloseNewTargetModal() {
         this.isNewTargetModalOpen = false;
-        this.selectedTarget = '';
-        this.targetScore = 0;
-        this.keyResultIdToAddTarget = '';
+        this.selectedTargets = [];
+        this.targetScore = null;
     }
 
-    // handleTargetSelection(event) {
-    //     this.selectedTarget = event.detail.value;
-    // }
+    handleTargetSelection(event) {
+        this.selectedTargets = event.detail.value;
+        this.updateAdditionalOptions();
+    }
 
-    // handleTargetScoreChange(event) {
-    //     this.targetScore = parseInt(event.target.value, 10);
-    // }
+    handleTargetScoreChange(event) {
+        this.targetScore = event.target.value;
+    }
 
-    // handleSaveNewTarget() {
-    //     addTarget({ keyResultId: this.keyResultIdToAddTarget, targetName: this.selectedTarget, targetScore: this.targetScore })
-    //         .then(() => {
-    //             this.isNewTargetModalOpen = false;
-    //             return refreshApex(this.objectives);
-    //         })
-    //         .catch(error => {
-    //             console.error('Error saving new target: ', JSON.stringify(error));
-    //         });
-    // }
+    updateAdditionalOptions() {
+        if (this.selectedTargets.includes('Events')) {
+            this.additionalOptions = this.eventOptions;
+        } else if (this.selectedTargets.includes('Contracts')) {
+            this.additionalOptions = this.contractOptions;
+        } else {
+            this.additionalOptions = [];
+        }
+    }
+
+    handleSaveNewTarget() {
+        if (!this.selectedTargets.length || !this.targetScore) {
+            this.showToast('Error', 'Please select at least one target and set a target score', 'error');
+            return;
+        }
+
+        saveNewTarget({
+            keyResultId: this.currentKeyResultId,
+            targets: this.selectedTargets,
+            targetScore: this.targetScore
+        })
+        .then(() => {
+            this.showToast('Success', 'Target saved successfully', 'success');
+            this.selectedTargets = [];
+            this.targetScore = null;
+            return getKeyResultsWithTargets({ objectiveId: this.objectiveId });
+        })
+        .then(result => {
+            this.keyResults = result;
+        })
+        .catch(error => {
+            this.showToast('Error saving target', error.body.message, 'error');
+        });
+    }
 
     showToast(title, message, variant) {
         const event = new ShowToastEvent({

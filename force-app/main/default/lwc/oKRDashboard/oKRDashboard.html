@@ -1,3 +1,5 @@
+<!-- sldsValidatorIgnore -->
+<!-- sldsValidatorIgnore -->
 <template>
     <lightning-card title="OKR Dashboard">
         <!-- User Selector -->
@@ -28,31 +30,34 @@
                         <!-- Key Results -->
                         <template for:each={objective.keyResults} for:item="keyResult">
                             <lightning-card key={keyResult.id} title={keyResult.name}>
-                                <!-- <ul>
-                                    <template for:each={keyResult.targets} for:item="target">
-                                        <li key={target.name}>
-                                            <p>{target.name}</p>
-                                            <p>Current Score: {target.currentScore} / Target Score: {target.targetScore}</p>
-                                        </li>
-                                    </template>
-                                </ul> -->
-                                <lightning-button key={keyResult.id} 
-                                                  label="Show Related Records"
-                                                  onclick={handleShowRelatedRecords}
-                                                  data-id={keyResult.id}>
+                                <div class="slds-m-around_medium">
+                                    <ul>
+                                        <template for:each={keyResult.targets} for:item="target">
+                                            <li key={target.objectType}>
+                                                {target.objectType} {target.currentScore}/{target.targetScore}
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </div>
+                                <div slot="actions">
+                                    <lightning-button key={keyResult.id} 
+                                                    label="Show Related Records"
+                                                    onclick={handleShowRelatedRecords}
+                                                    data-id={keyResult.id}>
+                                    </lightning-button>
+                                    <lightning-button key={keyResult.id} 
+                                                    label="Add Related Record"
+                                                    onclick={handleShowNewRelatedRecordModal} 
+                                                    data-id={keyResult.id}>
+                                    </lightning-button>
+                                    <lightning-button key={keyResult.id} 
+                                                    label="Add New Target"
+                                                    onclick={handleShowNewTargetModal}
+                                                    data-id={keyResult.id}>
                                 </lightning-button>
-                                <lightning-button key={keyResult.id} 
-                                                  label="Add Related Record"
-                                                  onclick={handleShowNewRelatedRecordModal} 
-                                                  data-id={keyResult.id}>
-                                </lightning-button>
-                                <!-- <lightning-button key={keyResult.id} 
-                                                  label="Add New Target"
-                                                  onclick={handleShowNewTargetModal}
-                                                  data-id={keyResult.id}>
-                                </lightning-button> -->
-                            </lightning-card>
-                        </template>
+                            </div>
+                        </lightning-card>
+                    </template>
                         <!-- Button to add new Key Result -->
                         <lightning-button label="Add New Key Result"
                                           onclick={handleShowNewKeyResultModal}
@@ -62,39 +67,7 @@
                 </template>
             </lightning-accordion>
         </template>
-        
-        <!-- Modal for adding new target -->
-        <!-- <template if:true={isNewTargetModalOpen}>
-            <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
-                <div class="slds-modal__container">
-                    <header class="slds-modal__header">
-                        <button class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse"
-                                title="Close" onclick={handleCloseNewTargetModal}>
-                            <lightning-icon icon-name="utility:close" alternative-text="close" size="small"></lightning-icon>
-                            <span class="slds-assistive-text">Close</span>
-                        </button>
-                        <h2 class="slds-text-heading_medium">Add New Target</h2>
-                    </header>
-                    <div class="slds-modal__content slds-var-p-around_medium">
-                        <lightning-combobox label="Select Target" 
-                                            value={selectedTarget} 
-                                            options={targetOptions} 
-                                            onchange={handleTargetSelection}>
-                        </lightning-combobox>
-                        <lightning-input label="Target Score" 
-                                         type="number" 
-                                         value={targetScore} 
-                                         onchange={handleTargetScoreChange}>
-                        </lightning-input>
-                    </div>
-                    <footer class="slds-modal__footer">
-                        <lightning-button variant="neutral" label="Cancel" onclick={handleCloseNewTargetModal}></lightning-button>
-                        <lightning-button variant="brand" label="Save" onclick={handleSaveNewTarget}></lightning-button>
-                    </footer>
-                </div>
-            </section>
-            <div class="slds-backdrop slds-backdrop_open"></div>
-        </template>         -->
+
 
         <!-- Modal for new Key Result -->
         <template if:true={isNewKeyResultModalOpen}>
@@ -229,4 +202,54 @@
             <div class="slds-backdrop slds-backdrop_open"></div>
         </template>
     </lightning-card>
+
+    <!-- Modal for adding Targets -->
+    <template if:true={isNewTargetModalOpen}>
+        <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+            <div class="slds-modal__container">
+                <header class="slds-modal__header">
+                    <button class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse" title="Close" onclick={handleCloseNewTargetModal}>
+                        <lightning-icon icon-name="utility:close" alternative-text="close" size="small"></lightning-icon>
+                        <span class="slds-assistive-text">Close</span>
+                    </button>
+                    <h2 class="slds-text-heading_medium">Add New Targets</h2>
+                </header>
+                <div class="slds-modal__content slds-p-around_medium">
+                    <lightning-combobox
+                        name="targetOptions"
+                        label="Select Targets"
+                        placeholder="Select target(s)"
+                        multiple
+                        options={targetOptions}
+                        value={selectedTargets}
+                        onchange={handleTargetSelection}>
+                    </lightning-combobox>
+
+                    <template if:true={additionalOptions.length}>
+                        <lightning-combobox
+                            name="additionalOptions"
+                            label="Select Specific Type"
+                            placeholder="Select specific type"
+                            options={additionalOptions}
+                            value={selectedAdditionalOption}
+                            onchange={handleAdditionalOptionChange}>
+                        </lightning-combobox>
+                    </template>
+
+                    <lightning-input
+                        type="number"
+                        label="Target Score"
+                        value={targetScore}
+                        onchange={handleTargetScoreChange}>
+                    </lightning-input>
+                </div>
+                <footer class="slds-modal__footer">
+                    <lightning-button variant="neutral" label="Cancel" onclick={handleCloseNewTargetModal}></lightning-button>
+                    <lightning-button variant="brand" label="Save Targets" onclick={handleSaveNewTarget}></lightning-button>
+                </footer>
+            </div>
+        </section>
+        <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
+
 </template>
