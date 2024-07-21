@@ -295,6 +295,10 @@ export default class OkrDashboard extends NavigationMixin(LightningElement) {
         }
     }
 
+    handleAdditionalOptionChange(event) {
+        this.selectedAdditionalOption = event.detail.value;
+    }
+
     handleSaveNewTarget() {
         if (!this.selectedTargets.length || !this.targetScore) {
             this.showToast('Error', 'Please select at least one target and set a target score', 'error');
@@ -304,7 +308,8 @@ export default class OkrDashboard extends NavigationMixin(LightningElement) {
         saveNewTarget({
             keyResultId: this.currentKeyResultId,
             targets: this.selectedTargets,
-            targetScore: this.targetScore
+            targetScore: this.targetScore,
+            additionalOption: this.selectedAdditionalOption
         })
         .then(() => {
             this.showToast('Success', 'Target saved successfully', 'success');
